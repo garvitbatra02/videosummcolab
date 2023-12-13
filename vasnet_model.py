@@ -1,9 +1,3 @@
-__author__ = 'Jiri Fajtl'
-__email__ = 'ok1zjf@gmail.com'
-__version__= '3.6'
-__status__ = "Research"
-__date__ = "1/12/2018"
-__license__= "MIT License"
 
 
 import torch
