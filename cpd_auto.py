@@ -2,29 +2,7 @@ import numpy as np
 from cpd_nonlin import cpd_nonlin
 
 def cpd_auto(K, ncp, vmax, desc_rate=1, **kwargs):
-    """Main interface
-
-    Detect change points automatically selecting their number
-        K       - kernel between each pair of frames in video
-        ncp     - maximum ncp
-        vmax    - special parameter
-    Optional arguments:
-        lmin     - minimum segment length
-        lmax     - maximum segment length
-        desc_rate - rate of descriptor sampling (vmax always corresponds to 1x)
-
-    Note:
-        - cps are always calculated in subsampled coordinates irrespective to
-            desc_rate
-        - lmin and m should be in agreement
-    ---
-    Returns: (cps, costs)
-        cps   - best selected change-points
-        costs - costs for 0,1,2,...,m change-points
-
-    Memory requirement: ~ (3*N*N + N*ncp)*4 bytes ~= 16 * N^2 bytes
-    That is 1,6 Gb for the N=10000.
-    """
+    
     m = ncp
     (_, scores) = cpd_nonlin(K, m, backtrack=False, **kwargs)
 
