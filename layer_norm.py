@@ -1,5 +1,4 @@
-# Courtesy of jekbradbury
-# https://github.com/pytorch/pytorch/issues/1959
+
 
 from __future__ import absolute_import
 from __future__ import division
