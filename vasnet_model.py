@@ -29,17 +29,17 @@ class SelfAttention(nn.Module):
 
 
     def forward(self, x):
-        n = x.shape[0]  # sequence length
+        n = x.shape[0]  
 
-        K = self.K(x)  # ENC (n x m) => (n x H) H= hidden size
-        Q = self.Q(x)  # ENC (n x m) => (n x H) H= hidden size
+        K = self.K(x)  
+        Q = self.Q(x)  
         V = self.V(x)
 
         Q *= 0.06
         logits = torch.matmul(Q, K.transpose(1,0))
 
         if self.ignore_itself:
-            # Zero the diagonal activations (a distance of each frame with itself)
+            # To set attention with itself to 0
             logits[torch.eye(n).byte()] = -float("Inf")
 
         if self.apperture > 0:
@@ -62,7 +62,7 @@ class VASNet(nn.Module):
     def __init__(self):
         super(VASNet, self).__init__()
 
-        self.m = 1024 # cnn features size
+        self.m = 1024
         self.hidden_size = 1024
 
         self.att = SelfAttention(input_size=self.m, output_size=self.m)
@@ -81,10 +81,8 @@ class VASNet(nn.Module):
 
     def forward(self, x, seq_len):
 
-        m = x.shape[2] # Feature size
+        m = x.shape[2]
 
-        # Place the video frames to the batch dimension to allow for batch arithm. operations.
-        # Assumes input batch size = 1.
         x = x.view(-1, m)
         y, att_weights_ = self.att(x)
 
@@ -92,8 +90,7 @@ class VASNet(nn.Module):
         y = self.drop50(y)
         y = self.layer_norm_y(y)
 
-        # Frame level importance score regression
-        # Two layer NN
+    
         y = self.ka(y)
         y = self.relu(y)
         y = self.drop50(y)
