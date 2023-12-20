@@ -192,7 +192,7 @@ class AONet:
         return weights_filename, splits_file
 
 
-   def train(self, output_dir='EX-0'):
+    def train(self, output_dir='EX-0'):
         print("Initializing Deformable VASNet model and optimizer...")
         self.model.train()
 
