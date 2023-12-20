@@ -16,7 +16,6 @@ class LayerNorm(nn.Module):
         std = x.std(-1, keepdim=True)
         return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
-
 class DeformableAttention(nn.Module):
     def __init__(self, dim, offset_dim):
         super(DeformableAttention, self).__init__()
@@ -29,10 +28,12 @@ class DeformableAttention(nn.Module):
     def forward(self, x, mask=None):
         B = x.shape[0]
 
+        # Adjusted the chunking along the last dimension
         qkv = self.proj_qkv(x.unsqueeze(1))
         q, k, v = torch.chunk(qkv, 3, dim=-1)
 
-        offset = self.conv_offset(x.unsqueeze(1)).squeeze(3).permute(0, 2, 1)  # Offset prediction
+        # Simplified the offset calculation
+        offset = self.conv_offset(x.unsqueeze(1).unsqueeze(3)).squeeze(3).permute(0, 2, 1)
 
         # Reshape offset to (B, 1, N, offset_dim)
         offset = offset.view(B, 1, -1, self.offset_dim)
@@ -54,7 +55,6 @@ class DeformableAttention(nn.Module):
         output = output.transpose(1, 2).contiguous().view(B, -1, v.size(-1))
 
         return output, attn_weights, offset
-
 
 
 class DeformableSelfAttention(nn.Module):
