@@ -193,90 +193,90 @@ class AONet:
 
 
    def train(self, output_dir='EX-0'):
-    print("Initializing Deformable VASNet model and optimizer...")
-    self.model.train()
-
-    criterion = nn.MSELoss()
-
-    if self.hps.use_cuda:
-        criterion = criterion.cuda()
-
-    parameters = filter(lambda p: p.requires_grad, self.model.parameters())
-    self.optimizer = torch.optim.Adam(parameters, lr=self.hps.lr[0], weight_decay=self.hps.l2_req)
-
-    print("Starting training...")
-
-    max_val_fscore = 0
-    max_val_fscore_epoch = 0
-    train_keys = self.train_keys[:]
-
-    lr = self.hps.lr[0]
-    for epoch in range(self.hps.epochs_max):
-        print("Epoch: {0:6}".format(str(epoch)+"/"+str(self.hps.epochs_max)), end='')
+        print("Initializing Deformable VASNet model and optimizer...")
         self.model.train()
-        avg_loss = []
 
-        random.shuffle(train_keys)
+        criterion = nn.MSELoss()
 
-        for i, key in enumerate(train_keys):
-            dataset = self.get_data(key)
-            seq = dataset['features'][...]
-            seq = torch.from_numpy(seq).unsqueeze(0)
-            target = dataset['gtscore'][...]
-            target = torch.from_numpy(target).unsqueeze(0)
-
-            # Normalize frame scores
-            target -= target.min()
-            target /= target.max()
-
-            if self.hps.use_cuda:
-                seq, target = seq.float().cuda(), target.float().cuda()
-
-            seq_len = seq.shape[1]
-
-            # Forward pass through Deformable VASNet
-            y, _, offsets = self.model(seq, seq_len)
-
-            # Compute attention loss
-            loss_att = 0
-            for offset in offsets:
-                loss_att += criterion(offset, torch.zeros_like(offset))
-
-            # Compute main MSE loss
-            loss = criterion(y, target)
-
-            # Combine the main loss and attention loss
-            loss = loss + loss_att
-
-            # Backward and optimize
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-            avg_loss.append([float(loss), float(loss_att)])
-
-        # Evaluate test dataset
-        val_fscore, video_scores = self.eval(self.test_keys)
-        if max_val_fscore < val_fscore:
-            max_val_fscore = val_fscore
-            max_val_fscore_epoch = epoch
-
-        avg_loss = np.array(avg_loss)
-        print("   Train loss: {0:.05f}".format(np.mean(avg_loss[:, 0])), end='')
-        print('   Test F-score avg/max: {0:0.5}/{1:0.5}'.format(val_fscore, max_val_fscore))
-
-        if self.verbose:
-            video_scores = [["No", "Video", "F-score"]] + video_scores
-            print_table(video_scores, cell_width=[3, 40, 8])
-
-        # Save model weights
-        path, filename = os.path.split(self.split_file)
-        base_filename, _ = os.path.splitext(filename)
-        path = os.path.join(output_dir, 'models_temp', base_filename+'_'+str(self.split_id))
-        os.makedirs(path, exist_ok=True)
-        filename = str(epoch)+'_'+str(round(val_fscore*100, 3))+'.pth.tar'
-        torch.save(self.model.state_dict(), os.path.join(path, filename))
-
-    return max_val_fscore, max_val_fscore_epoch
+        if self.hps.use_cuda:
+            criterion = criterion.cuda()
+    
+        parameters = filter(lambda p: p.requires_grad, self.model.parameters())
+        self.optimizer = torch.optim.Adam(parameters, lr=self.hps.lr[0], weight_decay=self.hps.l2_req)
+    
+        print("Starting training...")
+    
+        max_val_fscore = 0
+        max_val_fscore_epoch = 0
+        train_keys = self.train_keys[:]
+    
+        lr = self.hps.lr[0]
+        for epoch in range(self.hps.epochs_max):
+            print("Epoch: {0:6}".format(str(epoch)+"/"+str(self.hps.epochs_max)), end='')
+            self.model.train()
+            avg_loss = []
+    
+            random.shuffle(train_keys)
+    
+            for i, key in enumerate(train_keys):
+                dataset = self.get_data(key)
+                seq = dataset['features'][...]
+                seq = torch.from_numpy(seq).unsqueeze(0)
+                target = dataset['gtscore'][...]
+                target = torch.from_numpy(target).unsqueeze(0)
+    
+                # Normalize frame scores
+                target -= target.min()
+                target /= target.max()
+    
+                if self.hps.use_cuda:
+                    seq, target = seq.float().cuda(), target.float().cuda()
+    
+                seq_len = seq.shape[1]
+    
+                # Forward pass through Deformable VASNet
+                y, _, offsets = self.model(seq, seq_len)
+    
+                # Compute attention loss
+                loss_att = 0
+                for offset in offsets:
+                    loss_att += criterion(offset, torch.zeros_like(offset))
+    
+                # Compute main MSE loss
+                loss = criterion(y, target)
+    
+                # Combine the main loss and attention loss
+                loss = loss + loss_att
+    
+                # Backward and optimize
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+                avg_loss.append([float(loss), float(loss_att)])
+    
+            # Evaluate test dataset
+            val_fscore, video_scores = self.eval(self.test_keys)
+            if max_val_fscore < val_fscore:
+                max_val_fscore = val_fscore
+                max_val_fscore_epoch = epoch
+    
+            avg_loss = np.array(avg_loss)
+            print("   Train loss: {0:.05f}".format(np.mean(avg_loss[:, 0])), end='')
+            print('   Test F-score avg/max: {0:0.5}/{1:0.5}'.format(val_fscore, max_val_fscore))
+    
+            if self.verbose:
+                video_scores = [["No", "Video", "F-score"]] + video_scores
+                print_table(video_scores, cell_width=[3, 40, 8])
+    
+            # Save model weights
+            path, filename = os.path.split(self.split_file)
+            base_filename, _ = os.path.splitext(filename)
+            path = os.path.join(output_dir, 'models_temp', base_filename+'_'+str(self.split_id))
+            os.makedirs(path, exist_ok=True)
+            filename = str(epoch)+'_'+str(round(val_fscore*100, 3))+'.pth.tar'
+            torch.save(self.model.state_dict(), os.path.join(path, filename))
+    
+        return max_val_fscore, max_val_fscore_epoch
 
 
 
