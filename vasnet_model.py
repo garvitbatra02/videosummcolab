@@ -32,7 +32,7 @@ class DeformableAttention(nn.Module):
         qkv = self.proj_qkv(x.unsqueeze(1))
         q, k, v = torch.chunk(qkv, 3, dim=-1)
 
-        offset = self.conv_offset(x.unsqueeze(1).permute(0, 2, 1)).permute(0, 2, 1)  # Offset prediction
+        offset = self.conv_offset(x.unsqueeze(1)).squeeze(3).permute(0, 2, 1)  # Offset prediction
 
         # Reshape offset to (B, 1, N, offset_dim)
         offset = offset.view(B, 1, -1, self.offset_dim)
