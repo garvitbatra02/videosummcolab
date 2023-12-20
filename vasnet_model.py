@@ -58,30 +58,30 @@ class DeformableAttention(nn.Module):
 
 
 class DeformableSelfAttention(nn.Module):
-    def __init__(self, dim, heads, offset_dim, attn_drop=0.0, proj_drop=0.0):
+    def __init__(self, input_size, output_size, offset_dim, attn_drop=0.0, proj_drop=0.0):
         super(DeformableSelfAttention, self).__init__()
 
-        self.dim = dim
-        self.heads = heads
+        self.input_size = input_size
+        self.output_size = output_size
         self.offset_dim = offset_dim
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj_drop = nn.Dropout(proj_drop)
 
-        self.deformable_attn = DeformableAttention(dim, heads, offset_dim)
-        self.proj = nn.Linear(dim, dim)
+        self.deformable_attn = DeformableAttention(output_size, offset_dim)
+        self.proj = nn.Linear(output_size, output_size)
 
     def forward(self, x, mask=None):
         B, N, C = x.size()
 
-        x_total = einops.rearrange(x, 'b n c -> b (n 1) c')
-        attn_output, att_weights_,offset = self.deformable_attn(x_total, mask)
-        attn_output = einops.rearrange(attn_output, 'b (n 1) c -> b n c', n=N)
+        x_total = x.unsqueeze(1)
+        attn_output, att_weights_, offset = self.deformable_attn(x_total, mask)
+        attn_output = attn_output.squeeze(1)
 
         # Linear projection and dropout
         x = self.proj(attn_output)
         x = self.proj_drop(x)
 
-        return x, att_weights_,offset
+        return x, att_weights_, offset
 
 
 class DeformableVASNet(nn.Module):
