@@ -1,71 +1,97 @@
 
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from config import  *
-from layer_norm import  *
 
-
-
-class SelfAttention(nn.Module):
-
-    def __init__(self, apperture=-1, ignore_itself=False, input_size=1024, output_size=1024):
-        super(SelfAttention, self).__init__()
-
-        self.apperture = apperture
-        self.ignore_itself = ignore_itself
-
-        self.m = input_size
-        self.output_size = output_size
-
-        self.K = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
-        self.Q = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
-        self.V = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
-        self.output_linear = nn.Linear(in_features=self.output_size, out_features=self.m, bias=False)
-
-        self.drop50 = nn.Dropout(0.5)
-
-
+class LayerNorm(nn.Module):
+    def __init__(self, features, eps=1e-6):
+        super(LayerNorm, self).__init__()
+        self.gamma = nn.Parameter(torch.ones(features))
+        self.beta = nn.Parameter(torch.zeros(features))
+        self.eps = eps
 
     def forward(self, x):
-        n = x.shape[0]  
-
-        K = self.K(x)  
-        Q = self.Q(x)  
-        V = self.V(x)
-
-        Q *= 0.06
-        logits = torch.matmul(Q, K.transpose(1,0))
-
-        if self.ignore_itself:
-            # To set attention with itself to 0
-            logits[torch.eye(n).byte()] = -float("Inf")
-
-        if self.apperture > 0:
-            # Set attention to zero to frames further than +/- apperture from the current one
-            onesmask = torch.ones(n, n)
-            trimask = torch.tril(onesmask, -self.apperture) + torch.triu(onesmask, self.apperture)
-            logits[trimask == 1] = -float("Inf")
-
-        att_weights_ = nn.functional.softmax(logits, dim=-1)
-        weights = self.drop50(att_weights_)
-        y = torch.matmul(V.transpose(1,0), weights).transpose(1,0)
-        y = self.output_linear(y)
-
-        return y, att_weights_
+        mean = x.mean(-1, keepdim=True)
+        std = x.std(-1, keepdim=True)
+        return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
 
+class DeformableAttention(nn.Module):
+    def __init__(self, dim, heads, offset_dim):
+        super(DeformableAttention, self).__init__()
+        self.dim = dim
+        self.heads = heads
+        self.offset_dim = offset_dim
 
-class VASNet(nn.Module):
+        self.proj_qkv = nn.Linear(dim, 3 * dim)
+        self.conv_offset = nn.Conv1d(offset_dim, 2 * heads * offset_dim, kernel_size=3, stride=1, padding=1)
 
+    def forward(self, x, mask=None):
+        B, N, C = x.size()
+
+        qkv = self.proj_qkv(x)
+        q, k, v = torch.chunk(qkv, 3, dim=2)
+
+        offset = self.conv_offset(x.permute(0, 2, 1)).permute(0, 2, 1)  # Offset prediction
+
+        # Reshape offset to (B, heads, N, offset_dim)
+        offset = offset.view(B, self.heads, N, self.offset_dim)
+
+        # Calculate normalized attention scores with offsets
+        q, k, v = q.unsqueeze(1), k.unsqueeze(1), v.unsqueeze(1)
+        q, k, v = map(lambda t: t.view(B, self.heads, N, -1), (q, k, v))
+
+        attn_scores = torch.matmul(q, k.transpose(-2, -1)) / (self.dim ** 0.5)
+        attn_scores += offset[:, :, :, :2]  # Incorporate offsets
+
+        attn_weights = F.softmax(attn_scores, dim=-1)
+        attn_weights = attn_weights.masked_fill(mask == 0, 0.0) if mask is not None else attn_weights
+
+        # Apply attention to values with offsets
+        output = torch.matmul(attn_weights, v) + offset[:, :, :, 2:]  # Incorporate offsets in values
+
+        # Reshape and concatenate to get the final output
+        output = output.transpose(1, 2).contiguous().view(B, N, -1)
+
+        return output,attn_weights 
+
+
+class DeformableSelfAttention(nn.Module):
+    def __init__(self, dim, heads, offset_dim, attn_drop=0.0, proj_drop=0.0):
+        super(DeformableSelfAttention, self).__init__()
+
+        self.dim = dim
+        self.heads = heads
+        self.offset_dim = offset_dim
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+        self.deformable_attn = DeformableAttention(dim, heads, offset_dim)
+        self.proj = nn.Linear(dim, dim)
+
+    def forward(self, x, mask=None):
+        B, N, C = x.size()
+
+        x_total = einops.rearrange(x, 'b n c -> b (n 1) c')
+        attn_output, att_weights_ = self.deformable_attn(x_total, mask)
+        attn_output = einops.rearrange(attn_output, 'b (n 1) c -> b n c', n=N)
+
+        # Linear projection and dropout
+        x = self.proj(attn_output)
+        x = self.proj_drop(x)
+
+        return x, att_weights_
+
+
+class DeformableVASNet(nn.Module):
     def __init__(self):
-        super(VASNet, self).__init__()
+        super(DeformableVASNet, self).__init__()
 
-        self.m = 1024
+        self.m = 1024  # cnn features size
         self.hidden_size = 1024
 
-        self.att = SelfAttention(input_size=self.m, output_size=self.m)
+        self.att = DeformableSelfAttention(input_size=self.m, output_size=self.m, offset_dim=1)
         self.ka = nn.Linear(in_features=self.m, out_features=1024)
         self.kb = nn.Linear(in_features=self.ka.out_features, out_features=1024)
         self.kc = nn.Linear(in_features=self.kb.out_features, out_features=1024)
@@ -78,10 +104,8 @@ class VASNet(nn.Module):
         self.layer_norm_y = LayerNorm(self.m)
         self.layer_norm_ka = LayerNorm(self.ka.out_features)
 
-
     def forward(self, x, seq_len):
-
-        m = x.shape[2]
+        m = x.shape[2]  # Feature size
 
         x = x.view(-1, m)
         y, att_weights_ = self.att(x)
@@ -90,7 +114,6 @@ class VASNet(nn.Module):
         y = self.drop50(y)
         y = self.layer_norm_y(y)
 
-    
         y = self.ka(y)
         y = self.relu(y)
         y = self.drop50(y)
@@ -101,7 +124,6 @@ class VASNet(nn.Module):
         y = y.view(1, -1)
 
         return y, att_weights_
-
 
 
 if __name__ == "__main__":
