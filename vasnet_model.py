@@ -15,6 +15,7 @@ class LayerNorm(nn.Module):
         mean = x.mean(-1, keepdim=True)
         std = x.std(-1, keepdim=True)
         return self.gamma * (x - mean) / (std + self.eps) + self.beta
+
 class DeformableAttention(nn.Module):
     def __init__(self, dim, offset_dim):
         super(DeformableAttention, self).__init__()
@@ -26,34 +27,24 @@ class DeformableAttention(nn.Module):
 
     def forward(self, x, mask=None):
         B = x.shape[0]
+        N = x.shape[1]
+        # Project queries, keys, and values
+        qkv = self.proj_qkv(x).chunk(3, dim=-1)
+        q, k, v = map(lambda t: t.view(B, N, -1), qkv)
 
-        # Adjusted the chunking along the last dimension
-        qkv = self.proj_qkv(x.unsqueeze(1))
-        q, k, v = torch.chunk(qkv, 3, dim=-1)
+        # Get offsets with convolution
+        offset = self.conv_offset(x.permute(0, 2, 1)).permute(0, 2, 1)  # Offset prediction
+        offset = offset.view(B, N, 2, self.offset_dim)
 
-        # Reshaped x for conv_offset
-        x_offset = x.unsqueeze(1).unsqueeze(3)
-
-        offset = self.conv_offset(x_offset).squeeze(3).permute(0, 2, 1)
-
-        # Reshape offset to (B, 1, N, offset_dim)
-        offset = offset.view(B, 1, -1, self.offset_dim)
-
-        # Calculate normalized attention scores with offsets
-        q, k, v = q.unsqueeze(1), k.unsqueeze(1), v.unsqueeze(1)
-        q, k, v = map(lambda t: t.view(B, 1, -1, -1), (q, k, v))
-
-        attn_scores = torch.matmul(q, k.transpose(-2, -1)) / (self.dim ** 0.5)
+        # Calculate attention scores with offsets
+        attn_scores = torch.matmul(q.unsqueeze(2), k.unsqueeze(1).transpose(-2, -1)) / (self.dim ** 0.5)
         attn_scores += offset[:, :, :, :2]  # Incorporate offsets
 
         attn_weights = F.softmax(attn_scores, dim=-1)
         attn_weights = attn_weights.masked_fill(mask == 0, 0.0) if mask is not None else attn_weights
 
         # Apply attention to values with offsets
-        output = torch.matmul(attn_weights, v) + offset[:, :, :, 2:]  # Incorporate offsets in values
-
-        # Reshape and concatenate to get the final output
-        output = output.transpose(1, 2).contiguous().view(B, -1, v.size(-1))
+        output = torch.matmul(attn_weights, v.unsqueeze(1)).squeeze(1) + offset[:, :, :, 2:]  # Incorporate offsets in values
 
         return output, attn_weights, offset
 
