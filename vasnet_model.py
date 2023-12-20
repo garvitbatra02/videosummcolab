@@ -28,7 +28,7 @@ class DeformableAttention(nn.Module):
         self.conv_offset = nn.Conv1d(1, 2 * offset_dim, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, mask=None):
-        B, C = x.size()
+        B, C = x.shape
 
         qkv = self.proj_qkv(x.unsqueeze(1))
         q, k, v = torch.chunk(qkv, 3, dim=2)
