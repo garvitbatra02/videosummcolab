@@ -54,7 +54,7 @@ class DeformableAttention(nn.Module):
         # Reshape and concatenate to get the final output
         output = output.transpose(1, 2).contiguous().view(B, N, -1)
 
-        return output,attn_weights 
+        return output,attn_weights,offset
 
 
 class DeformableSelfAttention(nn.Module):
@@ -74,14 +74,14 @@ class DeformableSelfAttention(nn.Module):
         B, N, C = x.size()
 
         x_total = einops.rearrange(x, 'b n c -> b (n 1) c')
-        attn_output, att_weights_ = self.deformable_attn(x_total, mask)
+        attn_output, att_weights_,offset = self.deformable_attn(x_total, mask)
         attn_output = einops.rearrange(attn_output, 'b (n 1) c -> b n c', n=N)
 
         # Linear projection and dropout
         x = self.proj(attn_output)
         x = self.proj_drop(x)
 
-        return x, att_weights_
+        return x, att_weights_,offset
 
 
 class DeformableVASNet(nn.Module):
@@ -108,7 +108,7 @@ class DeformableVASNet(nn.Module):
         m = x.shape[2]  # Feature size
 
         x = x.view(-1, m)
-        y, att_weights_ = self.att(x)
+        y, att_weights_,offset = self.att(x)
 
         y = y + x
         y = self.drop50(y)
@@ -123,7 +123,7 @@ class DeformableVASNet(nn.Module):
         y = self.sig(y)
         y = y.view(1, -1)
 
-        return y, att_weights_
+        return y, att_weights_,offset
 
 
 if __name__ == "__main__":
