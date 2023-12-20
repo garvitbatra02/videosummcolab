@@ -26,8 +26,8 @@ class DeformableAttention(nn.Module):
         self.conv_offset = nn.Conv1d(1, 2 * offset_dim, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, mask=None):
-        B = x.shape[0]
-        N = x.shape[1]
+        B = 1
+        N = x.shape[0]
         # Project queries, keys, and values
         qkv = self.proj_qkv(x).chunk(3, dim=-1)
         q, k, v = map(lambda t: t.view(B, N, -1), qkv)
