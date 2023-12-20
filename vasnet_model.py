@@ -28,20 +28,18 @@ class DeformableAttention(nn.Module):
 
     def forward(self, x, mask=None):
         B = x.shape[0]
-        C = x.shape[1]
 
         qkv = self.proj_qkv(x.unsqueeze(1))
-        qkv = qkv.view(B, 3, C, self.dim // C)  # Assuming dim is divisible by C
-        q, k, v = torch.chunk(qkv, 3, dim=1)
+        q, k, v = torch.chunk(qkv, 3, dim=-1)
 
-        offset = self.conv_offset(x.unsqueeze(1).squeeze(3)).permute(0, 2, 1)  # Offset prediction
+        offset = self.conv_offset(x.unsqueeze(1).permute(0, 2, 1)).permute(0, 2, 1)  # Offset prediction
 
-        # Reshape offset to (B, 1, C, offset_dim)
-        offset = offset.view(B, 1, C, self.offset_dim)
+        # Reshape offset to (B, 1, N, offset_dim)
+        offset = offset.view(B, 1, -1, self.offset_dim)
 
         # Calculate normalized attention scores with offsets
         q, k, v = q.unsqueeze(1), k.unsqueeze(1), v.unsqueeze(1)
-        q, k, v = map(lambda t: t.view(B, 1, C, -1), (q, k, v))
+        q, k, v = map(lambda t: t.view(B, 1, -1, -1), (q, k, v))
 
         attn_scores = torch.matmul(q, k.transpose(-2, -1)) / (self.dim ** 0.5)
         attn_scores += offset[:, :, :, :2]  # Incorporate offsets
@@ -53,10 +51,9 @@ class DeformableAttention(nn.Module):
         output = torch.matmul(attn_weights, v) + offset[:, :, :, 2:]  # Incorporate offsets in values
 
         # Reshape and concatenate to get the final output
-        output = output.transpose(1, 2).contiguous().view(B, C, -1)
+        output = output.transpose(1, 2).contiguous().view(B, -1, v.size(-1))
 
         return output, attn_weights, offset
-
 
 
 
