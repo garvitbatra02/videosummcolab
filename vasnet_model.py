@@ -33,7 +33,7 @@ class DeformableAttention(nn.Module):
         q, k, v = map(lambda t: t.view(B, N, -1), qkv)
 
         # Get offsets with convolution
-        offset = self.conv_offset(x.unsqueeze(0).transpose(1, 2)).transpose(1, 2)
+        offset = self.conv_offset(x)
         offset = offset.view(B, N, 2, self.offset_dim)
 
         # Calculate attention scores with offsets
