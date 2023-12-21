@@ -16,44 +16,37 @@ class LayerNorm(nn.Module):
         std = x.std(-1, keepdim=True)
         return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
-class DeformableAttention(nn.Module):
+class DeformableAttention1D(nn.Module):
     def __init__(self, dim, offset_dim):
-        super(DeformableAttention, self).__init__()
+        super(DeformableAttention1D, self).__init__()
         self.dim = dim
         self.offset_dim = offset_dim
 
-        # Linear layer to project input feature vectors to queries, keys, and values
         self.proj_qkv = nn.Linear(dim, 3 * dim)
-
-        # Convolutional layer to predict offsets
-        self.conv_offset = nn.Conv1d(dim, 2 * offset_dim, kernel_size=3, stride=1, padding=1)
+        self.conv_offset = nn.Conv1d(1, 2 * offset_dim, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, mask=None):
-        B = 1  # Batch size (assumed to be 1)
-        N = 1  # Number of heads (assumed to be 1)
+        B, L = x.shape  # Account for the 2D input shape
 
-        # Project queries, keys, and values using the linear layer
+        # Project queries, keys, and values
         qkv = self.proj_qkv(x).chunk(3, dim=-1)
-        q, k, v = map(lambda t: t.reshape(B, N, -1), qkv)
+        q, k, v = map(lambda t: t.view(B, -1, L), qkv)  # Reshape for 1D attention with 2D input
 
-        offset = self.conv_offset(x.unsqueeze(1)).squeeze(3).permute(0, 2, 1)
-        offset = offset.view(B, N, 2, self.offset_dim)
+        # Get offsets with convolution
+        offset = self.conv_offset(x.unsqueeze(1).transpose(1, 2)).squeeze(2)  # Unsqueeze and squeeze for 1D convolution
 
         # Calculate attention scores with offsets
         attn_scores = torch.matmul(q.unsqueeze(2), k.unsqueeze(1).transpose(-2, -1)) / (self.dim ** 0.5)
+        attn_scores += offset[:, :, :2]  # Incorporate offsets
 
-        # Incorporate offsets
-        offset_slice = offset[:, :, :, :2].squeeze(-2).squeeze(-1).unsqueeze(-2).unsqueeze(-1)
-        attn_scores += offset_slice.expand_as(attn_scores)
-
-        
         attn_weights = F.softmax(attn_scores, dim=-1)
         attn_weights = attn_weights.masked_fill(mask == 0, 0.0) if mask is not None else attn_weights
 
         # Apply attention to values with offsets
-        output = torch.matmul(attn_weights, v.unsqueeze(1)).squeeze(1) + offset[:, :, :, 2:]  # Incorporate offsets in values
+        output = torch.matmul(attn_weights, v).squeeze(1) + offset[:, :, 2:]
 
         return output, attn_weights, offset
+
 
 
 
