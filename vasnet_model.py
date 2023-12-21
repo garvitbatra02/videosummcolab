@@ -26,14 +26,14 @@ class DeformableAttention(nn.Module):
         self.conv_offset = nn.Conv1d(1, 2 * offset_dim, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, mask=None):
-        B = x.shape[0]
-        N = 1
+        B = 1
+        N = x.shape[0]
         # Project queries, keys, and values
         qkv = self.proj_qkv(x).chunk(3, dim=-1)
         q, k, v = map(lambda t: t.view(B, N, -1), qkv)
 
         # Get offsets with convolution
-        offset = self.conv_offset(x.unsqueeze(2).transpose(1, 2)).transpose(1, 2)
+        offset = self.conv_offset(x.unsqueeze(0).transpose(1, 2)).transpose(1, 2)
         offset = offset.view(B, N, 2, self.offset_dim)
 
         # Calculate attention scores with offsets
