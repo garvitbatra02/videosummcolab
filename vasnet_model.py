@@ -42,9 +42,11 @@ class DeformableAttention(nn.Module):
 
         # Calculate attention scores with offsets
         attn_scores = torch.matmul(q.unsqueeze(2), k.unsqueeze(1).transpose(-2, -1)) / (self.dim ** 0.5)
-        print("Shapes: attn_scores - {}, offset - {}".format(attn_scores.shape, offset[:, :, :, :2].squeeze(-2).squeeze(-1).shape))
-        attn_scores += offset[:, :, :, :2].squeeze(-2).squeeze(-1)  # Incorporate offsets
-        
+
+        # Incorporate offsets
+        offset_slice = offset[:, :, :, :2].squeeze(-2).squeeze(-1).unsqueeze(-2).unsqueeze(-1)
+        attn_scores += offset_slice.expand_as(attn_scores)
+
         
         attn_weights = F.softmax(attn_scores, dim=-1)
         attn_weights = attn_weights.masked_fill(mask == 0, 0.0) if mask is not None else attn_weights
