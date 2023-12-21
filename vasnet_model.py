@@ -22,18 +22,22 @@ class DeformableAttention(nn.Module):
         self.dim = dim
         self.offset_dim = offset_dim
 
+        # Linear layer to project input feature vectors to queries, keys, and values
         self.proj_qkv = nn.Linear(dim, 3 * dim)
-        self.conv_offset = nn.Conv1d(1, 2 * offset_dim, kernel_size=3, stride=1, padding=1)
+
+        # Convolutional layer to predict offsets
+        self.conv_offset = nn.Conv1d(dim, 2 * offset_dim, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, mask=None):
-        B = 1
-        N = x.shape[0]
-        # Project queries, keys, and values
+        B = 1  # Batch size (assumed to be 1)
+        N = 1  # Number of heads (assumed to be 1)
+
+        # Project queries, keys, and values using the linear layer
         qkv = self.proj_qkv(x).chunk(3, dim=-1)
         q, k, v = map(lambda t: t.view(B, N, -1), qkv)
 
-        # Get offsets with convolution
-        offset = self.conv_offset(x)
+        # Get offsets with the convolutional layer
+        offset = self.conv_offset(x.unsqueeze(0)).squeeze(0).permute(0, 2, 1)  # Offset prediction
         offset = offset.view(B, N, 2, self.offset_dim)
 
         # Calculate attention scores with offsets
@@ -47,7 +51,6 @@ class DeformableAttention(nn.Module):
         output = torch.matmul(attn_weights, v.unsqueeze(1)).squeeze(1) + offset[:, :, :, 2:]  # Incorporate offsets in values
 
         return output, attn_weights, offset
-
 
 
 class DeformableSelfAttention(nn.Module):
