@@ -36,9 +36,8 @@ class DeformableAttention(nn.Module):
         qkv = self.proj_qkv(x).chunk(3, dim=-1)
         q, k, v = map(lambda t: t.reshape(B, N, -1), qkv)
 
-        # Get offsets with the convolutional layer
-        offset = self.conv_offset(x.permute(0, 2, 1)).permute(0, 2, 1) # Offset prediction
-        offset = offset.reshape(B, N, 2, -1)
+        offset = self.conv_offset(x.unsqueeze(1)).squeeze(3).permute(0, 2, 1)
+        offset = offset.view(B, N, 2, self.offset_dim)
 
         # Calculate attention scores with offsets
         attn_scores = torch.matmul(q.unsqueeze(2), k.unsqueeze(1).transpose(-2, -1)) / (self.dim ** 0.5)
