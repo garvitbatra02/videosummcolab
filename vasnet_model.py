@@ -16,9 +16,9 @@ class LayerNorm(nn.Module):
         std = x.std(-1, keepdim=True)
         return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
-class DeformableAttention1D(nn.Module):
+class DeformableAttention(nn.Module):
     def __init__(self, dim, offset_dim):
-        super(DeformableAttention1D, self).__init__()
+        super(DeformableAttention, self).__init__()
         self.dim = dim
         self.offset_dim = offset_dim
 
