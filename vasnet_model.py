@@ -26,18 +26,17 @@ class DeformableAttention(nn.Module):
         self.conv_offset = nn.Conv1d(1, 2 * offset_dim, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, mask=None):
-        B = x.shape[0]
-        L = x.shape[1] # Account for the 2D input shape
-
+        L = x.shape[0]  # Account for unbatched 1D input
+        C = x.shape[1]
         # Project queries, keys, and values
         qkv = self.proj_qkv(x).chunk(3, dim=-1)
-        q, k, v = map(lambda t: t.view(B, -1, L), qkv)  # Reshape for 1D attention with 2D input
+        q, k, v = map(lambda t: t.view(L, -1), qkv)  # Reshape for unbatched 1D attention
 
         # Get offsets with convolution
-        offset = self.conv_offset(x.unsqueeze(1).transpose(1, 2)).squeeze(2)  # Unsqueeze and squeeze for 1D convolution
+        offset = self.conv_offset(x).squeeze(2)  # No need for transpose in unbatched case
 
         # Calculate attention scores with offsets
-        attn_scores = torch.matmul(q.unsqueeze(2), k.unsqueeze(1).transpose(-2, -1)) / (self.dim ** 0.5)
+        attn_scores = torch.matmul(q.unsqueeze(1), k.transpose(-2, -1)) / (self.dim ** 0.5)
         attn_scores += offset[:, :, :2]  # Incorporate offsets
 
         attn_weights = F.softmax(attn_scores, dim=-1)
@@ -47,8 +46,6 @@ class DeformableAttention(nn.Module):
         output = torch.matmul(attn_weights, v).squeeze(1) + offset[:, :, 2:]
 
         return output, attn_weights, offset
-
-
 
 
 class DeformableSelfAttention(nn.Module):
