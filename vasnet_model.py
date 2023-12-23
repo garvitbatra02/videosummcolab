@@ -37,7 +37,10 @@ class DeformableAttention(nn.Module):
 
         # Calculate attention scores with offsets
         attn_scores = torch.matmul(q.unsqueeze(1), k.transpose(-2, -1)) / (self.dim ** 0.5)
-        attn_scores += offset[:, :, :2]  # Incorporate offsets
+        print(attn_scores.shape, offset.shape)
+       
+        offset = offset.view(L, L, -1)  # Reshape to match attn_scores
+        attn_scores += offset[:, :, :2]  # Now the addition should work
 
         attn_weights = F.softmax(attn_scores, dim=-1)
         attn_weights = attn_weights.masked_fill(mask == 0, 0.0) if mask is not None else attn_weights
