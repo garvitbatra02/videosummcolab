@@ -29,51 +29,61 @@ class DeformableAttention(nn.Module):
         L = x.shape[0]  # Account for unbatched 1D input
         C = x.shape[1]
         # Project queries, keys, and values
-        qkv = self.proj_qkv(x).chunk(3, dim=-1)
-        q, k, v = map(lambda t: t.view(L, -1), qkv)  # Reshape for unbatched 1D attention
+        offset = self.conv_offset(Q)
+        x_sampled = F.grid_sample(
+                input=x
+                grid=offset[..., (1, 0)], # y, x -> x, y
+                mode='bilinear', align_corners=True) # B * g, Cg, Hg, Wg
 
-        # Get offsets with convolution
-        offset = self.conv_offset(x).squeeze(2)  # No need for transpose in unbatched case
-
-        # Calculate attention scores with offsets
-        attn_scores = torch.matmul(q.unsqueeze(1), k.transpose(-2, -1)) / (self.dim ** 0.5)
-        print(attn_scores.shape, offset.shape)
-       
-        offset = offset.view(L, L, -1)  # Reshape to match attn_scores
-        attn_scores += offset[:, :, :2]  # Now the addition should work
-
-        attn_weights = F.softmax(attn_scores, dim=-1)
-        attn_weights = attn_weights.masked_fill(mask == 0, 0.0) if mask is not None else attn_weights
-
-        # Apply attention to values with offsets
-        output = torch.matmul(attn_weights, v).squeeze(1) + offset[:, :, 2:]
-
-        return output, attn_weights, offset
+        return x_sampled, offset
 
 
 class DeformableSelfAttention(nn.Module):
-    def __init__(self, input_size, output_size, offset_dim, attn_drop=0.0, proj_drop=0.0):
+   def __init__(self, apperture=-1, ignore_itself=False, input_size=1024, output_size=1024):
         super(DeformableSelfAttention, self).__init__()
 
-        self.input_size = input_size
+        self.apperture = apperture
+        self.ignore_itself = ignore_itself
+
+        self.m = input_size
         self.output_size = output_size
-        self.offset_dim = offset_dim
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj_drop = nn.Dropout(proj_drop)
 
-        self.deformable_attn = DeformableAttention(output_size, offset_dim)
-        self.proj = nn.Linear(output_size, output_size)
+        self.K = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
+        self.Q = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
+        self.V = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
+        self.output_linear = nn.Linear(in_features=self.output_size, out_features=self.m, bias=False)
 
-    def forward(self, x, mask=None):
-        x_total = x.unsqueeze(1)
-        attn_output, att_weights_, offset = self.deformable_attn(x_total, mask)
-        attn_output = attn_output.squeeze(1)
+        self.drop50 = nn.Dropout(0.5)
 
-        # Linear projection and dropout
-        x = self.proj(attn_output)
-        x = self.proj_drop(x)
 
-        return x, att_weights_, offset
+
+    def forward(self, x):
+        n = x.shape[0]  # sequence length
+
+        K = self.K(x)  # ENC (n x m) => (n x H) H= hidden size
+        Q = self.Q(x)  # ENC (n x m) => (n x H) H= hidden size
+        V = self.V(x)
+        K, V, offset = self.deformable_attn(Q, K, V)
+        Q *= 0.06
+        logits = torch.matmul(Q, K.transpose(1,0))
+
+        if self.ignore_itself:
+            # Zero the diagonal activations (a distance of each frame with itself)
+            logits[torch.eye(n).byte()] = -float("Inf")
+
+        if self.apperture > 0:
+            # Set attention to zero to frames further than +/- apperture from the current one
+            onesmask = torch.ones(n, n)
+            trimask = torch.tril(onesmask, -self.apperture) + torch.triu(onesmask, self.apperture)
+            logits[trimask == 1] = -float("Inf")
+
+        att_weights_ = nn.functional.softmax(logits, dim=-1)
+        weights = self.drop50(att_weights_)
+        y = torch.matmul(V.transpose(1,0), weights).transpose(1,0)
+        y = self.output_linear(y)
+
+        return y, att_weights_
+
 
 
 
