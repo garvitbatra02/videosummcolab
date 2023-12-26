@@ -21,8 +21,6 @@ class DeformableAttention(nn.Module):
         super(DeformableAttention, self).__init__()
         self.dim = dim
         self.offset_dim = offset_dim
-
-        self.proj_qkv = nn.Linear(dim, 3 * dim)
         self.conv_offset = nn.Conv1d(1, 2 * offset_dim, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, mask=None):
@@ -48,6 +46,7 @@ class DeformableSelfAttention(nn.Module):
         self.m = input_size
         self.output_size = output_size
 
+        self.D = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
         self.K = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
         self.Q = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
         self.V = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
@@ -60,10 +59,12 @@ class DeformableSelfAttention(nn.Module):
     def forward(self, x):
         n = x.shape[0]  # sequence length
 
-        K = self.K(x)  # ENC (n x m) => (n x H) H= hidden size
         Q = self.Q(x)  # ENC (n x m) => (n x H) H= hidden size
-        V = self.V(x)
-        K, V, offset = self.deformable_attn(Q, K, V)
+        offset = self.D(Q)
+        x_sampled = F.grid_sample(
+                input=x.u
+                grid=offset[..., (1, 0)], 
+                mode='bilinear', align_corners=True)
         Q *= 0.06
         logits = torch.matmul(Q, K.transpose(1,0))
 
