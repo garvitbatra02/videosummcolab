@@ -240,7 +240,7 @@ class AONet:
                     seq, target = seq.float().cuda(), target.float().cuda()
 
                 seq_len = seq.shape[1]
-                y, _, __ = self.model(seq,seq_len)
+                y, _ = self.model(seq,seq_len)
                 loss_att = 0
 
                 loss = criterion(y, target)
