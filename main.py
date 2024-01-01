@@ -153,7 +153,7 @@ class AONet:
         np.random.seed(rnd_seed)
         torch.manual_seed(rnd_seed)
 
-        self.model = DeformableVASNet()
+        self.model = DeformableSelfAttention()
         self.model.eval()
         self.model.apply(weights_init)
         #print(self.model)
