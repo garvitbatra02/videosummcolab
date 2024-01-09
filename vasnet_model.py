@@ -41,7 +41,7 @@ class SelfAttention(nn.Module):
         off = torch.stack((ofx, ofy), -1)
         
         pos = np.indices((H,W)).transpose(1,2,0)
-        pos = torch.from_numpy(pos)
+        pos = torch.from_numpy(pos).to('cuda')
         pos = pos.to(torch.float)
         pos[:,:,0] = 2*pos[:,:,0]/H - 1
         pos[:,:,1] = 2*pos[:,:,1]/W - 1
