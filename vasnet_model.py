@@ -19,7 +19,6 @@ class SelfAttention(nn.Module):
         self.m = input_size
         self.output_size = output_size
 
-        self.ofx = nn.Linear(in_features=self.m, out_features=self.output_size)
         self.ofy = nn.Linear(in_features=self.m, out_features=self.output_size)
         self.K = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
         self.Q = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
@@ -44,7 +43,7 @@ class SelfAttention(nn.Module):
         n = x.shape[0]  # sequence length
         Q = self.Q(x)  # ENC (n x m) => (n x H) H= hidden size
 
-        ofx = self.ofx(Q)
+        ofx = torch.zeros(H,W)
         ofy = self.ofy(Q)
         off = torch.stack((ofx, ofy), -1)
         
