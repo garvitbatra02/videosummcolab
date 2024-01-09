@@ -43,8 +43,8 @@ class SelfAttention(nn.Module):
         n = x.shape[0]  # sequence length
         Q = self.Q(x)  # ENC (n x m) => (n x H) H= hidden size
 
-        ofx = torch.zeros(H,W)
-        ofy = self.ofy(Q)
+        ofx = torch.zeros(H,W).to('cuda')
+        ofy = self.ofy(x)
         off = torch.stack((ofx, ofy), -1)
         
         pos = self._get_pos(H,W)
