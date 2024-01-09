@@ -19,6 +19,8 @@ class SelfAttention(nn.Module):
         self.m = input_size
         self.output_size = output_size
 
+        self.ofx = nn.Linear(in_features=self.m, out_features=self.output_size)
+        self.ofy = nn.Linear(in_features=self.m, out_features=self.output_size)
         self.K = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
         self.Q = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
         self.V = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
@@ -36,15 +38,26 @@ class SelfAttention(nn.Module):
 
         ofx = self.ofx(Q)
         ofy = self.ofy(Q)
-        ofx = F.softmax(ofx,1)
-        ofy = F.softmax(ofy,1)
-        of = torch.stack((ofx, ofy), -1)
+        off = torch.stack((ofx, ofy), -1)
         
         pos = np.indices((H,W)).transpose(1,2,0)
         pos = torch.from_numpy(pos)
         pos = pos.to(torch.float)
-        pos[:,:,0] = 2*x[:,:,0]/7 - 1
-        x[:,:,1] = 2*x[:,:,1]/14 - 1
+        pos[:,:,0] = 2*pos[:,:,0]/H - 1
+        pos[:,:,1] = 2*pos[:,:,1]/W - 1
+
+        pos = (pos + off).clamp(-1., +1.)
+        pos = torch.reshape(pos,(1,H,W,2))
+
+        x_new = F.grid_sample(
+            input = x.reshape(1,1,H,W),
+            grid = pos,
+            mode='bilinear', align_corners=True)
+        
+        x_new = x_new.reshape(H,W)
+        
+        K = self.K(x_new)
+        V = self.V(x_new)
         
         Q *= 0.06
         logits = torch.matmul(Q, K.transpose(1,0))
