@@ -153,6 +153,7 @@ class AONet:
         torch.manual_seed(rnd_seed)
 
         self.model = VASNet()
+        self.model.to('cuda')
         self.model.eval()
         self.model.apply(weights_init)
         #print(self.model)
