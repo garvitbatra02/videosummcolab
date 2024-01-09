@@ -29,7 +29,15 @@ class SelfAttention(nn.Module):
         self.drop50 = nn.Dropout(0.5)
 
 
-
+    @torch.no_grad()
+    def _get_pos(self,H,W):
+        pos = np.indices((H,W)).transpose(1,2,0)
+        pos = torch.from_numpy(pos).to('cuda')
+        pos = pos.to(torch.float)
+        pos[:,:,0] = 2*pos[:,:,0]/H - 1
+        pos[:,:,1] = 2*pos[:,:,1]/W - 1
+        return pos
+    
     def forward(self, x):
         
         H,W = x.shape[0],x.shape[1]
@@ -40,11 +48,7 @@ class SelfAttention(nn.Module):
         ofy = self.ofy(Q)
         off = torch.stack((ofx, ofy), -1)
         
-        pos = np.indices((H,W)).transpose(1,2,0)
-        pos = torch.from_numpy(pos).to('cuda')
-        pos = pos.to(torch.float)
-        pos[:,:,0] = 2*pos[:,:,0]/H - 1
-        pos[:,:,1] = 2*pos[:,:,1]/W - 1
+        pos = self._get_pos(H,W)
 
         pos = (pos + off).clamp(-1., +1.)
         pos = torch.reshape(pos,(1,H,W,2))
