@@ -44,7 +44,8 @@ class SelfAttention(nn.Module):
         Q = self.Q(x)  # ENC (n x m) => (n x H) H= hidden size
 
         ofx = torch.zeros(H,W).to('cuda')
-        ofy = self.ofy(x)
+        Q_off = torch.clone(Q)
+        ofy = self.ofy(Q_off)
         off = torch.stack((ofx, ofy), -1)
         
         pos = self._get_pos(H,W)
@@ -62,7 +63,7 @@ class SelfAttention(nn.Module):
         K = self.K(x_new)
         V = self.V(x_new)
         
-        Q *= 0.06
+        Q = Q*0.06
         logits = torch.matmul(Q, K.transpose(1,0))
 
         if self.ignore_itself:
