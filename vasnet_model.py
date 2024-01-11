@@ -44,7 +44,7 @@ class SelfAttention(nn.Module):
         Q = self.Q(x)  # ENC (n x m) => (n x H) H= hidden size
 
         ofx = torch.zeros(H,W).to('cuda')
-        Q_off = torch.clone(Q)
+        Q_off = torch.sum(Q,1)
         ofy = self.ofy(Q_off)
         off = torch.stack((ofx, ofy), -1)
         
