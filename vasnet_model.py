@@ -18,8 +18,9 @@ class SelfAttention(nn.Module):
 
         self.m = input_size
         self.output_size = output_size
+        self.seq_len = 0
 
-        self.ofy = None
+        self.ofy = nn.Linear(in_features=self.seq_len, out_features=self.seq_len, bias=False)
         self.K = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
         self.Q = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
         self.V = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
@@ -27,12 +28,6 @@ class SelfAttention(nn.Module):
 
         self.drop50 = nn.Dropout(0.5)
 
-
-    def _ofy_calc(self, seq_len):
-        
-        self.ofy = nn.Linear(in_features = seq_len, out_features=seq_len)
-
-        return
     
     @torch.no_grad()
     def _get_pos(self,H,W):
@@ -43,7 +38,7 @@ class SelfAttention(nn.Module):
         pos[:,:,1] = 2*pos[:,:,1]/W - 1
         return pos
     
-    def forward(self, x):
+    def forward(self, x, seq_l):
         
         H,W = x.shape[0],x.shape[1]
         n = x.shape[0]  # sequence length
@@ -51,8 +46,8 @@ class SelfAttention(nn.Module):
 
         ofx = torch.zeros(H,W).to('cuda')
 
-        self._ofy_calc(H)
-        Q_off = torch.sum(Q,1)
+        self.seq_len = seq_l
+        Q_off = torch.sum(Q,1).to('cuda')
         ofy = self.ofy(Q_off)
         ofy = ofy.repeat(W,1).transpose(0,1)
         off = torch.stack((ofx, ofy), -1)
@@ -123,7 +118,7 @@ class VASNet(nn.Module):
         # Place the video frames to the batch dimension to allow for batch arithm. operations.
         # Assumes input batch size = 1.
         x = x.view(-1, m)
-        y, att_weights_ = self.att(x)
+        y, att_weights_ = self.att(x,seq_len)
 
         y = y + x
         y = self.drop50(y)
