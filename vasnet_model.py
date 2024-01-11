@@ -19,7 +19,7 @@ class SelfAttention(nn.Module):
         self.m = input_size
         self.output_size = output_size
 
-        self.ofy = nn.Linear(in_features=self.m, out_features=self.output_size)
+        self.ofy = None
         self.K = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
         self.Q = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
         self.V = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
@@ -28,6 +28,12 @@ class SelfAttention(nn.Module):
         self.drop50 = nn.Dropout(0.5)
 
 
+    def _ofy_calc(self, seq_len):
+        
+        self.ofy = nn.Linear(in_features = seq_len, out_features=seq_len)
+
+        return
+    
     @torch.no_grad()
     def _get_pos(self,H,W):
         pos = np.indices((H,W)).transpose(1,2,0)
@@ -44,8 +50,11 @@ class SelfAttention(nn.Module):
         Q = self.Q(x)  # ENC (n x m) => (n x H) H= hidden size
 
         ofx = torch.zeros(H,W).to('cuda')
+
+        self._ofy_calc(H)
         Q_off = torch.sum(Q,1)
         ofy = self.ofy(Q_off)
+        ofy = ofy.repeat(W,1).transpose(0,1)
         off = torch.stack((ofx, ofy), -1)
         
         pos = self._get_pos(H,W)
