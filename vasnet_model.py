@@ -5,7 +5,8 @@ import torch.nn.functional as F
 import numpy as np
 from config import  *
 from layer_norm import  *
-
+from Quaternion_ops import *
+from Quaternion_layers import *
 
 
 class SelfAttention(nn.Module):
