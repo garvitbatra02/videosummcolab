@@ -20,11 +20,11 @@ class SelfAttention(nn.Module):
         self.output_size = output_size
         self.seq_len = 0
 
-        self.ofy = nn.Linear(in_features=self.seq_len, out_features=self.seq_len, bias=False)
-        self.K = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
-        self.Q = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
-        self.V = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
-        self.output_linear = nn.Linear(in_features=self.output_size, out_features=self.m, bias=False)
+        self.ofy = QuaternionLinear(in_features=self.seq_len, out_features=self.seq_len, bias=False)
+        self.K = QuaternionLinear(in_features=self.m, out_features=self.output_size, bias=False)
+        self.Q = QuaternionLinear(in_features=self.m, out_features=self.output_size, bias=False)
+        self.V = QuaternionLinear(in_features=self.m, out_features=self.output_size, bias=False)
+        self.output_linear = QuaternionLinear(in_features=self.output_size, out_features=self.m, bias=False)
 
         self.drop50 = nn.Dropout(0.5)
 
@@ -68,7 +68,7 @@ class SelfAttention(nn.Module):
         V = self.V(x_new)
         
         Q = Q*0.06
-        logits = torch.matmul(Q, K.transpose(1,0))
+        logits = hamilton_product(Q, K)
 
         if self.ignore_itself:
             # Zero the diagonal activations (a distance of each frame with itself)
@@ -80,9 +80,9 @@ class SelfAttention(nn.Module):
             trimask = torch.tril(onesmask, -self.apperture) + torch.triu(onesmask, self.apperture)
             logits[trimask == 1] = -float("Inf")
 
-        att_weights_ = nn.functional.softmax(logits, dim=-1)
+        att_weights_ = q_normalize(logits,-1)
         weights = self.drop50(att_weights_)
-        y = torch.matmul(V.transpose(1,0), weights).transpose(1,0)
+        y = hamilton_product(weights, V)
         y = self.output_linear(y)
 
         return y, att_weights_
@@ -98,17 +98,17 @@ class VASNet(nn.Module):
         self.hidden_size = 1024
 
         self.att = SelfAttention(input_size=self.m, output_size=self.m)
-        self.ka = nn.Linear(in_features=self.m, out_features=1024)
-        self.kb = nn.Linear(in_features=self.ka.out_features, out_features=1024)
-        self.kc = nn.Linear(in_features=self.kb.out_features, out_features=1024)
-        self.kd = nn.Linear(in_features=self.ka.out_features, out_features=1)
+        self.ka = QuaternionLinear(self.m, 1024)
+        self.kb = QuaternionLinear(self.m, 1024)
+        self.kc = QuaternionLinear(self.m, 1024)
+        self.kd = nn.Linear(in_features=self.m, out_features=1)
 
         self.sig = nn.Sigmoid()
         self.relu = nn.ReLU()
         self.drop50 = nn.Dropout(0.5)
         self.softmax = nn.Softmax(dim=0)
         self.layer_norm_y = LayerNorm(self.m)
-        self.layer_norm_ka = LayerNorm(self.ka.out_features)
+        self.layer_norm_ka = LayerNorm(self.m)
 
 
     def forward(self, x, seq_len):
